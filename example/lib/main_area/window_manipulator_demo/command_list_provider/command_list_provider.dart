@@ -1,12 +1,12 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:example/main_area/window_manipulator_demo/command_list_provider/command_list_provider_constants.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:macos_window_utils/macos/ns_window_button_type.dart';
 import 'package:macos_window_utils/macos/ns_window_level.dart';
 import 'package:macos_window_utils/macos/ns_window_style_mask.dart';
 import 'package:macos_window_utils/macos_window_utils.dart';
+import 'package:macos_window_utils/toolbars/toolbars.dart';
 
 import '../command_list/command.dart';
 
@@ -105,6 +105,12 @@ class CommandListProvider {
         function: () => WindowManipulator.showZoomButton(),
       ),
       Command(
+        name: 'miniaturizeWindow()',
+        description: 'Removes the window from the screen list and displays the '
+            'minimized window in the Dock.',
+        function: () => WindowManipulator.miniaturizeWindow(),
+      ),
+      Command(
         name: 'hideMiniaturizeButton()',
         function: () => WindowManipulator.hideMiniaturizeButton(),
       ),
@@ -201,6 +207,35 @@ class CommandListProvider {
       Command(
         name: 'addToolbar()',
         function: () => WindowManipulator.addToolbar(),
+      ),
+      Command(
+        name: 'addToolbar(toolbar: const BlockingToolbar())',
+        description: 'Adds a blocking toolbar to the window.\n\nBlocking '
+            'toolbars contain an area that stops double clicks from zooming the'
+            'window, thus allowing for the placement of buttons that can be '
+            'clicked repeatedly.\n\nSetting the `blockingAreaDebugColor` to an '
+            'easily visible color can be useful for debugging purposes:\n\n'
+            '![image](https://github.com/user-attachments/assets/984c4dc7-f3ea-4b38-ba65-9e611982d32c)'
+            'You may wish to hide the native title to extend the blocking '
+            'area:\n\n'
+            '![image](https://github.com/user-attachments/assets/62e16d4a-1e4d-4c4d-9f1b-f731d08e0b1c)',
+        function: () =>
+            WindowManipulator.addToolbar(toolbar: const BlockingToolbar()),
+      ),
+      Command(
+        name:
+            'addToolbar(toolbar: const BlockingToolbar(blockingAreaDebugColor: Colors.red))',
+        description: 'Adds a blocking toolbar to the window.\n\nBlocking '
+            'toolbars contain an area that stops double clicks from zooming the'
+            'window, thus allowing for the placement of buttons that can be '
+            'clicked repeatedly.\n\nSetting the `blockingAreaDebugColor` to an '
+            'easily visible color can be useful for debugging purposes:\n\n'
+            '![image](https://github.com/user-attachments/assets/984c4dc7-f3ea-4b38-ba65-9e611982d32c)'
+            'You may wish to hide the native title to extend the blocking '
+            'area:\n\n'
+            '![image](https://github.com/user-attachments/assets/62e16d4a-1e4d-4c4d-9f1b-f731d08e0b1c)',
+        function: () => WindowManipulator.addToolbar(
+            toolbar: const BlockingToolbar(blockingAreaDebugColor: Colors.red)),
       ),
       Command(
         name: 'removeToolbar()',
@@ -597,7 +632,7 @@ class CommandListProvider {
             buttonType: NSWindowButtonType.closeButton, offset: null),
       ),
       Command(
-        name: 'WindowManipulator.getStandardWindowButtonPosition(buttonType: '
+        name: 'getStandardWindowButtonPosition(buttonType: '
             'NSWindowButtonType.closeButton)',
         description: 'Prints the position of the close button.\n\n'
             '**Note:** The y position is measured as the distance from the '
@@ -608,7 +643,7 @@ class CommandListProvider {
                 .toString()),
       ),
       Command(
-        name: 'WindowManipulator.centerWindow()',
+        name: 'centerWindow()',
         description: 'Sets the window’s location to the center of the screen.'
             '\n\nThe window is placed exactly in the center horizontally and '
             'somewhat above center vertically. Such a placement carries a '
@@ -618,7 +653,7 @@ class CommandListProvider {
         function: () => WindowManipulator.centerWindow(),
       ),
       Command(
-        name: 'WindowManipulator.getWindowFrame()',
+        name: 'getWindowFrame()',
         description: 'Returns the window’s window’s frame rectangle in screen '
             'coordinates, including the title bar.\n\n'
             'Keep in mind that the y-coordinate returned is measured from the '
@@ -627,7 +662,7 @@ class CommandListProvider {
             debugPrint((await WindowManipulator.getWindowFrame()).toString()),
       ),
       Command(
-        name: 'WindowManipulator.setWindowFrame('
+        name: 'setWindowFrame('
             'const Offset(64, 32) & const Size(512, 512),'
             'animate: true)',
         description: 'Sets the window’s frame rectangle in screen coordinates, '
@@ -637,25 +672,25 @@ class CommandListProvider {
             animate: true),
       ),
       Command(
-        name: 'WindowManipulator.preventWindowClosure()',
+        name: 'preventWindowClosure()',
         description: 'Prevents the window from being closed by the user.\n\n'
             'The window will still be closable programmatically by calling '
             '`closeWindow`.',
         function: () => WindowManipulator.preventWindowClosure(),
       ),
       Command(
-        name: 'WindowManipulator.allowWindowClosure()',
+        name: 'allowWindowClosure()',
         description: 'Allows the window to be closed by the user.',
         function: () => WindowManipulator.allowWindowClosure(),
       ),
       Command(
-        name: 'WindowManipulator.isWindowClosureAllowed()',
+        name: 'isWindowClosureAllowed()',
         description: 'Returns whether the window can be closed by the user.',
         function: () async => debugPrint(
             (await WindowManipulator.isWindowClosureAllowed()).toString()),
       ),
       Command(
-        name: 'WindowManipulator.closeWindow()',
+        name: 'closeWindow()',
         description: 'Removes the window from the screen. \n\n'
             'The close method differs in two important ways from the '
             '`performClose` method:\n'
@@ -668,10 +703,22 @@ class CommandListProvider {
         function: () => WindowManipulator.closeWindow(),
       ),
       Command(
-        name: 'WindowManipulator.performClose()',
+        name: 'performClose()',
         description: 'Simulates the user clicking the close button by '
             'momentarily highlighting the button and then closing the window.',
         function: () => WindowManipulator.performClose(),
+      ),
+      Command(
+        name: 'setWindowMinSize(const Size(480, 320))',
+        description: 'Sets the minimum window size to 480x320.',
+        function: () =>
+            WindowManipulator.setWindowMinSize(const Size(480, 320)),
+      ),
+      Command(
+        name: 'setWindowMaxSize(const Size(960, 640))',
+        description: 'Sets the maximum window size to 960x640.',
+        function: () =>
+            WindowManipulator.setWindowMaxSize(const Size(960, 640)),
       ),
     ];
   }

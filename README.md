@@ -38,10 +38,12 @@ English | [简体中文](README_zh.md)
 + An `NSAppPresentationOptions` class that allows modifications to the window's fullscreen presentation options.
 + Methods to get and set the positions of the window’s standard window buttons (such as the close, miniaturize, and zoom buttons).
 + Methods to control whether the window should be closable by the user, as well as methods to close the window programmatically.
++ Widgets to enable passthrough views in the toolbar that pass mouse events (such as clicking or dragging) to the Flutter application.
++ Methods to set min/max window size
 
 Additionally, the package ships with an example project that showcases the plugin's features via an intuitive searchable user interface:
 
-<img width="857" alt="screenshot of example project" src="https://user-images.githubusercontent.com/86920182/209587744-b21f2cd1-07a4-43ee-99c8-7cce1d89482d.png">
+<img width="855" alt="Screenshot of Example Project" src="https://github.com/user-attachments/assets/32b58d27-6285-45a2-b79d-39bf49013a8f" />
 
 ## Getting started
 
@@ -233,6 +235,64 @@ options.applyAsFullScreenPresentationOptions();
 ```
 
 **Note:** `NSAppPresentationOptions` uses the `NSWindow`'s delegate to change the window's fullscreen presentation options. Therefore, `enableWindowDelegate` needs to be set to `true` in your `WindowManipulator.initialize` call for it to work.
+
+## Developing for older macOS versions
+
+If you’re targeting older macOS versions (Monterey and earlier), it is necessary to perform the following steps to make the macos_window_utils plugin work correctly:
+
+Open the `macos/Runner.xcworkspace` folder of your project using Xcode, press ⇧ + ⌘ + O and search for `MainFlutterWindow.swift`.
+
+Insert `import macos_window_utils` at the top of the file.
+Then, replace the code above the `super.awakeFromNib()`-line with the following code:
+
+```swift
+let windowFrame = self.frame
+let macOSWindowUtilsViewController = MacOSWindowUtilsViewController()
+self.contentViewController = macOSWindowUtilsViewController
+self.setFrame(windowFrame, display: true)
+
+/* Initialize the macos_window_utils plugin */
+MainFlutterWindowManipulator.start(mainFlutterWindow: self)
+
+RegisterGeneratedPlugins(registry: macOSWindowUtilsViewController.flutterViewController)
+```
+
+Assuming you're starting with the default configuration, the finished code should look something like this:
+
+```diff
+import Cocoa
+import FlutterMacOS
++import macos_window_utils
+
+class MainFlutterWindow: NSWindow {
+  override func awakeFromNib() {
+-   let flutterViewController = FlutterViewController.init()
+-   let windowFrame = self.frame
+-   self.contentViewController = flutterViewController
+-   self.setFrame(windowFrame, display: true)
+
+-   RegisterGeneratedPlugins(registry: flutterViewController)
+    
++   let windowFrame = self.frame
++   let macOSWindowUtilsViewController = MacOSWindowUtilsViewController()
++   self.contentViewController = macOSWindowUtilsViewController
++   self.setFrame(windowFrame, display: true)
+
++   /* Initialize the macos_window_utils plugin */
++   MainFlutterWindowManipulator.start(mainFlutterWindow: self)
+
++   RegisterGeneratedPlugins(registry: macOSWindowUtilsViewController.flutterViewController)
+
+    super.awakeFromNib()
+  }
+}
+```
+
+## Developing on older macOS versions
+
+If you’re developing on an outdated macOS system you are likely using an outdated version of the Swift compiler as well. Support for outdated Swift compiler versions is currently provided on a best-effort basis. Unfortunately, Apple provides limited tools and resources to aid with this. Therefore, if you encounter any issues, feel free to open an issue on GitHub and I will try to help you out.
+
+That said, keep in mind that if you’re compiling your app with an outdated Swift compiler, any features that rely on APIs that are not available in your version of the Swift compiler will not work, even if your app is run on a newer macOS version. To provide the best experience for your users, it is recommended to always use the latest version of Xcode and the Swift compiler.
 
 ## License
 

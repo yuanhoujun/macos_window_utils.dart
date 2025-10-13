@@ -12,6 +12,7 @@ import 'package:macos_window_utils/macos/visual_effect_view_properties.dart';
 import 'package:macos_window_utils/macos/ns_visual_effect_view_material.dart';
 
 import 'ns_window_delegate_handler/ns_window_delegate_handler.dart';
+import 'toolbars/toolbars.dart';
 
 /// Class that provides methods to manipulate the application's window.
 class WindowManipulator {
@@ -204,6 +205,12 @@ class WindowManipulator {
     await _windowManipulatorMethodChannel.invokeMethod('showZoomButton');
   }
 
+  /// Minimizes the current window into the task bar.
+  static Future<void> miniaturizeWindow() async {
+    await _completer.future;
+    await _windowManipulatorMethodChannel.invokeMethod('miniaturizeWindow');
+  }
+
   /// Hides the window's miniaturize button.
   static Future<void> hideMiniaturizeButton() async {
     await _completer.future;
@@ -370,9 +377,39 @@ class WindowManipulator {
   }
 
   /// Adds a toolbar to the window.
-  static Future<void> addToolbar() async {
+  ///
+  /// By default, the added toolbar is a [DefaultToolbar].
+  ///
+  /// A [BlockingToolbar] can be added like this:
+  ///
+  /// ```dart
+  /// WindowManipulator.addToolbar(
+  ///   toolbar: const BlockingToolbar(blockingAreaDebugColor: Colors.red)),
+  /// );
+  /// ```
+  ///
+  /// Blocking toolbars contain an area that stops double clicks from zooming the
+  /// window, thus allowing for the placement of buttons that can be clicked
+  /// repeatedly.
+  ///
+  /// Setting the `blockingAreaDebugColor` to an easily visible color can be
+  /// useful for debugging purposes:
+  ///
+  /// ![image](https://github.com/user-attachments/assets/984c4dc7-f3ea-4b38-ba65-9e611982d32c)
+  ///
+  /// You may wish to hide the native title to extend the blocking area:
+  ///
+  /// ![image](https://github.com/user-attachments/assets/62e16d4a-1e4d-4c4d-9f1b-f731d08e0b1c)
+  static Future<void> addToolbar(
+      {Toolbar toolbar = const DefaultToolbar()}) async {
     await _completer.future;
-    await _windowManipulatorMethodChannel.invokeMethod('addToolbar');
+    await _windowManipulatorMethodChannel.invokeMethod(
+      'addToolbar',
+      {
+        'toolbarName': toolbar.getName(),
+        'toolbarArguments': toolbar.getArguments(),
+      },
+    );
   }
 
   /// Removes the window's toolbar.
@@ -803,5 +840,65 @@ class WindowManipulator {
   static Future<void> performClose() async {
     await _completer.future;
     await _windowManipulatorMethodChannel.invokeMethod('performClose');
+  }
+
+  /// Updates the toolbar passthrough view with the specified parameters.
+  ///
+  /// The [id] parameter uniquely identifies the passthrough view.
+  /// The [x] and [y] parameters specify the position of the view.
+  /// The [width] and [height] parameters define the size of the view.
+  /// The [enableDebugLayers] parameter enables visual debugging layers if set
+  /// to true. Note that [enableDebugLayers] is meant to stay constant during
+  /// life lifetime of the app. Changing its state during runtime may lead to
+  /// unexpected behavior.
+  static Future<void> updateToolbarPassthroughView({
+    required String id,
+    required double x,
+    required double y,
+    required double width,
+    required double height,
+    required bool enableDebugLayers,
+  }) async {
+    await _completer.future;
+    await _windowManipulatorMethodChannel.invokeMethod(
+      'updateToolbarPassthroughView',
+      {
+        'id': id,
+        'x': x,
+        'y': y,
+        'width': width,
+        'height': height,
+        'enableDebugLayers': enableDebugLayers,
+      },
+    );
+  }
+
+  /// Removes the toolbar passthrough view with the specified [id].
+  static Future<void> removeToolbarPassthroughView({required String id}) async {
+    await _completer.future;
+    await _windowManipulatorMethodChannel.invokeMethod(
+      'removeToolbarPassthroughView',
+      {
+        'id': id,
+      },
+    );
+  }
+
+  /// Sets the minimum size for the window
+  static Future<void> setWindowMinSize(Size size) async {
+    await _completer.future;
+    await _windowManipulatorMethodChannel.invokeMethod('setWindowMinSize', {
+      'width': size.width,
+      'height': size.height,
+    });
+  }
+
+  /// Sets the maximum size for the window
+  static Future<void> setWindowMaxSize(Size size) async {
+    await _completer.future;
+    await _windowManipulatorMethodChannel.invokeMethod('setWindowMaxSize', {
+      'width': size.width,
+      'height': size.height,
+    });
   }
 }

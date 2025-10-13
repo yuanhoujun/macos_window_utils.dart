@@ -11,6 +11,7 @@ import FlutterMacOS
 public class MainFlutterWindowManipulator {
     private static var mainFlutterWindow: NSWindow?
     private static var mainFlutterWindowDelegate: FlutterWindowDelegate?
+    private static var passthroughViewHandler: PassthroughViewHandler = PassthroughViewHandler.create()
     
     private static func printNotStartedWarning() {
         print("Warning: The MainFlutterWindowManipulator has not been started. Please make sure the macos_window_utils plugin is initialized correctly in your MainFlutterWindow.swift file.")
@@ -43,6 +44,16 @@ public class MainFlutterWindowManipulator {
         makeTitlebarOpaque()
         disableFullSizeContentView()
         setWindowBackgroundColorToDefaultColor()
+        passthroughViewHandler.start(mainFlutterWindow: self.mainFlutterWindow!)
+    }
+    
+    public static func reset() {
+        if (self.mainFlutterWindow == nil) {
+            start(mainFlutterWindow: nil)
+            return;
+        }
+        
+        passthroughViewHandler.start(mainFlutterWindow: self.mainFlutterWindow!)
     }
     
     public static func createFlutterWindowDelegate(methodChannel: FlutterMethodChannel) {
@@ -171,7 +182,15 @@ public class MainFlutterWindowManipulator {
         
         self.mainFlutterWindow!.standardWindowButton(.zoomButton)!.isHidden = false
     }
-    
+
+    public static func miniaturizeWindow() {
+        if (self.mainFlutterWindow == nil) {
+            start(mainFlutterWindow: nil)
+        }
+        
+        mainFlutterWindow?.miniaturize(nil)
+    }
+
     public static func hideMiniaturizeButton() {
         if (self.mainFlutterWindow == nil) {
             start(mainFlutterWindow: nil)
@@ -396,17 +415,49 @@ public class MainFlutterWindowManipulator {
         macOSWindowUtilsViewController.removeVisualEffectSubview(subviewId)
     }
     
-    public static func addToolbar() {
+    public static func addToolbar(toolbarName: String, toolbarArguments: [String: String]) {
         if (self.mainFlutterWindow == nil) {
             start(mainFlutterWindow: nil)
         }
         
+#if compiler(>=4.2)
         if #available(macOS 10.13, *) {
-          let customToolbar = BlockingToolbar(flutterView: (self.mainFlutterWindow?.contentViewController as! MacOSWindowUtilsViewController).flutterViewController)
-            customToolbar.showsBaselineSeparator = false
-            customToolbar.delegate = customToolbar
-            self.mainFlutterWindow!.toolbar = customToolbar
+            switch (toolbarName) {
+            case "DefaultToolbar":
+                let newToolbar = NSToolbar()
+                
+                newToolbar.allowsUserCustomization = false
+                newToolbar.allowsExtensionItems = false
+#if compiler(>=6.1)
+                if #available(macOS 15.0, *) {
+                    newToolbar.allowsDisplayModeCustomization = false
+                }
+#endif
+                
+                self.mainFlutterWindow!.toolbar = newToolbar
+                
+            case "BlockingToolbar":
+                let blockingAreaDebugColor = NSColor.colorFromRGBAString(toolbarArguments["blockingAreaDebugColor"]!)
+                
+                let customToolbar = BlockingToolbar(flutterView: (self.mainFlutterWindow?.contentViewController as! MacOSWindowUtilsViewController).flutterViewController, blockingAreaDebugColor: blockingAreaDebugColor)
+                customToolbar.showsBaselineSeparator = false
+                customToolbar.delegate = customToolbar
+                
+                customToolbar.allowsUserCustomization = false
+                customToolbar.allowsExtensionItems = false
+#if compiler(>=6.1)
+                if #available(macOS 15.0, *) {
+                    customToolbar.allowsDisplayModeCustomization = false
+                }
+#endif
+                
+                self.mainFlutterWindow!.toolbar = customToolbar
+                
+            default:
+                print("Unknown toolbar name: \(toolbarName)")
+            }
         }
+#endif
     }
     
     public static func removeToolbar() {
@@ -710,5 +761,37 @@ public class MainFlutterWindowManipulator {
         }
         
         mainFlutterWindow?.performClose(nil)
+    }
+    
+    public static func updateToolbarPassthroughView(id: String, x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, enableDebugLayers: Bool) {
+        if (self.mainFlutterWindow == nil) {
+            start(mainFlutterWindow: nil)
+        }
+        
+        passthroughViewHandler.updateToolbarPassthroughView(id: id, x: x, y: y, width: width, height: height, enableDebugLayers: enableDebugLayers, flutterViewController: (self.mainFlutterWindow?.contentViewController as! MacOSWindowUtilsViewController).flutterViewController)
+    }
+    
+    public static func removeToolbarPassthroughView(id: String) {
+        if (self.mainFlutterWindow == nil) {
+            start(mainFlutterWindow: nil)
+        }
+        
+        passthroughViewHandler.removeToolbarPassthroughView(id: id)
+    }
+
+    public static func setWindowMinSize(width: CGFloat, height: CGFloat) {
+        if (self.mainFlutterWindow == nil) {
+            start(mainFlutterWindow: nil)
+        }
+
+        mainFlutterWindow!.minSize = NSMakeSize(width, height)
+    }
+
+    public static func setWindowMaxSize(width: CGFloat, height: CGFloat) {
+        if (self.mainFlutterWindow == nil) {
+            start(mainFlutterWindow: nil)
+        }
+        
+        mainFlutterWindow!.maxSize = NSMakeSize(width, height)
     }
 }
