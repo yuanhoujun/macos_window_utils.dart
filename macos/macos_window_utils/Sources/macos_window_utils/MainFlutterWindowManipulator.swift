@@ -424,7 +424,7 @@ public class MainFlutterWindowManipulator {
         if #available(macOS 10.13, *) {
             switch (toolbarName) {
             case "DefaultToolbar":
-                let newToolbar = NSToolbar()
+                let newToolbar = NSToolbar(identifier: "DefaultToolbar")
                 
                 newToolbar.allowsUserCustomization = false
                 newToolbar.allowsExtensionItems = false
