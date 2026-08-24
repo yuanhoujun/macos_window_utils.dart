@@ -28,4 +28,28 @@ void main() {
     relay.onResize();
     relay.onResize();
   });
+
+  testWidgets(
+      'visual effect subview container resize event relay unregisters callback',
+      (tester) async {
+    final relay = VisualEffectSubviewContainerResizeEventRelay(
+        disableUpdateOnBuild: false);
+    final callback = expectAsync0(() {}, count: 0);
+
+    relay.registerForceUpdateFunction(callback);
+    relay.unregisterForceUpdateFunction(callback);
+    relay.onResize();
+  });
+
+  testWidgets(
+      'visual effect subview container resize event relay keeps a different callback',
+      (tester) async {
+    final relay = VisualEffectSubviewContainerResizeEventRelay(
+        disableUpdateOnBuild: false);
+    final callback = expectAsync0(() {}, count: 1);
+
+    relay.registerForceUpdateFunction(callback);
+    relay.unregisterForceUpdateFunction(() {});
+    relay.onResize();
+  });
 }

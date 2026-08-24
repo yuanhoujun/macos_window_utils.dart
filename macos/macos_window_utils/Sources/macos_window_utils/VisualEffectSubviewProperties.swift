@@ -99,25 +99,31 @@ class VisualEffectSubviewProperties {
     
     /// Applies the stored properties to a provided VisualEffectSubview.
     public func applyToVisualEffectSubview(_ visualEffectSubview: VisualEffectSubview) {
-        if (frameSize != nil) {
-            visualEffectSubview.setFrameSize(frameSize!)
+        if let frameSize = frameSize,
+           frameSize.width.isFinite,
+           frameSize.height.isFinite,
+           frameSize.width >= 0,
+           frameSize.height >= 0 {
+            visualEffectSubview.setFrameSize(frameSize)
         }
         
-        if (frameOrigin != nil) {
-            visualEffectSubview.setFrameOrigin(frameOrigin!)
+        if let frameOrigin = frameOrigin,
+           frameOrigin.x.isFinite,
+           frameOrigin.y.isFinite {
+            visualEffectSubview.setFrameOrigin(frameOrigin)
         }
         
-        if (alphaValue != nil) {
-            visualEffectSubview.alphaValue = alphaValue!
+        if let alphaValue = alphaValue, alphaValue.isFinite {
+            visualEffectSubview.alphaValue = alphaValue
         }
         
-        if (cornerRadius != nil) {
-            if (cornerRadius! != 0) {
+        if let cornerRadius = cornerRadius, cornerRadius.isFinite, cornerRadius >= 0 {
+            if (cornerRadius != 0) {
                 visualEffectSubview.wantsLayer = true
-                visualEffectSubview.layer?.cornerRadius = cornerRadius!
+                visualEffectSubview.layer?.cornerRadius = cornerRadius
             } else {
                 if (visualEffectSubview.wantsLayer) {
-                    visualEffectSubview.layer?.cornerRadius = cornerRadius!
+                    visualEffectSubview.layer?.cornerRadius = cornerRadius
                 }
             }
         }

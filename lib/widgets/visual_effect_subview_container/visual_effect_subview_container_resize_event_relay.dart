@@ -26,6 +26,13 @@ class VisualEffectSubviewContainerResizeEventRelay {
     _forceUpdate = forceUpdate;
   }
 
+  /// Unregisters [forceUpdate] if it is currently registered.
+  void unregisterForceUpdateFunction(void Function() forceUpdate) {
+    if (identical(_forceUpdate, forceUpdate)) {
+      _forceUpdate = null;
+    }
+  }
+
   /// Relays a resize event to the [VisualEffectSubviewContainer] and forcefully
   /// triggers an update of its visual effect subview.
   ///

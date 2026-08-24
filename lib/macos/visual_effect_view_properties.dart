@@ -50,7 +50,7 @@ class VisualEffectSubviewProperties {
   static const bottomLeftCorner = 1 << 3;
 
   bool get isEmpty =>
-      frameHeight == null &&
+      frameWidth == null &&
       frameHeight == null &&
       frameX == null &&
       frameY == null &&

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'package:macos_window_utils/src/native_view_geometry.dart';
 import 'package:macos_window_utils/macos/ns_app_presentation_option.dart';
 import 'package:macos_window_utils/macos/ns_visual_effect_view_state.dart';
 import 'package:macos_window_utils/macos/ns_window_button_type.dart';
@@ -859,6 +860,16 @@ class WindowManipulator {
     required double height,
     required bool enableDebugLayers,
   }) async {
+    if (!isValidNativeViewGeometry(
+      x: x,
+      y: y,
+      width: width,
+      height: height,
+    )) {
+      await removeToolbarPassthroughView(id: id);
+      return;
+    }
+
     await _completer.future;
     await _windowManipulatorMethodChannel.invokeMethod(
       'updateToolbarPassthroughView',

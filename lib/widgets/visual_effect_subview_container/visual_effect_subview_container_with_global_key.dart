@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:macos_window_utils/macos_window_utils.dart';
+import 'package:macos_window_utils/src/native_view_geometry.dart';
 import 'package:macos_window_utils/widgets/visual_effect_subview_container/visual_effect_subview_container_resize_event_relay.dart';
 
 import 'visual_effect_subview_container_property_storage.dart';
@@ -49,63 +50,131 @@ class VisualEffectSubviewContainerWithGlobalKey extends StatefulWidget {
 class _VisualEffectSubviewContainerWithGlobalKeyState
     extends State<VisualEffectSubviewContainerWithGlobalKey> {
   int? _visualEffectSubviewId;
-  final _propertyStorage = VisualEffectSubviewContainerPropertyStorage();
+  var _propertyStorage = VisualEffectSubviewContainerPropertyStorage();
+  bool _isAddingVisualEffectSubview = false;
+  bool _isDisposed = false;
+  int _nativeSubviewGeneration = 0;
+  Timer? _updateTimer;
+  late final VoidCallback _forceUpdateCallback;
 
-  VisualEffectSubviewProperties _getInitialVisualEffectSubviewProperties() {
+  VisualEffectSubviewProperties _getVisualEffectSubviewProperties(
+    _VisualEffectSubviewGeometry geometry,
+  ) {
     return VisualEffectSubviewProperties(
+      frameX: geometry.x,
+      frameY: geometry.y,
+      frameWidth: geometry.width,
+      frameHeight: geometry.height,
       alphaValue: widget.alphaValue,
       cornerRadius: widget.cornerRadius,
       cornerMask: widget.cornerMask,
       material: widget.material,
+      state: widget.state,
     );
   }
 
   /// Creates a new visual effect subview and adds it to the application window.
-  void _addVisualEffectSubviewToApplicationWindow() async {
-    final properties = _getInitialVisualEffectSubviewProperties();
-    _visualEffectSubviewId =
-        await WindowManipulator.addVisualEffectSubview(properties);
-    _propertyStorage.updateProperties(properties);
+  Future<void> _addVisualEffectSubviewToApplicationWindow(
+    _VisualEffectSubviewGeometry geometry,
+  ) async {
+    if (_isDisposed ||
+        _isAddingVisualEffectSubview ||
+        _visualEffectSubviewId != null) {
+      return;
+    }
 
-    // Use a timer to run this code after the [build] method has run.
-    Timer(const Duration(), () {
-      _updateVisualEffectSubview();
-    });
+    _isAddingVisualEffectSubview = true;
+    final generation = _nativeSubviewGeneration;
+    var shouldReschedule = false;
+
+    try {
+      final properties = _getVisualEffectSubviewProperties(geometry);
+      final visualEffectSubviewId =
+          await WindowManipulator.addVisualEffectSubview(properties);
+
+      if (_isDisposed || generation != _nativeSubviewGeneration) {
+        await WindowManipulator.removeVisualEffectSubview(
+          visualEffectSubviewId,
+        );
+        shouldReschedule = !_isDisposed;
+        return;
+      }
+
+      _visualEffectSubviewId = visualEffectSubviewId;
+      _propertyStorage.updateProperties(properties);
+      shouldReschedule = true;
+    } catch (error, stackTrace) {
+      _reportNativeViewError(error, stackTrace);
+    } finally {
+      _isAddingVisualEffectSubview = false;
+      if (shouldReschedule && !_isDisposed && mounted) {
+        _scheduleVisualEffectSubviewUpdate();
+      }
+    }
   }
 
   /// Initializes a resize event relay, if one is provided.
   void _initializeResizeEventRelay() {
-    if (widget.resizeEventRelay == null) {
-      return;
-    }
-
-    widget.resizeEventRelay!.registerForceUpdateFunction(() {
-      _updateVisualEffectSubview();
-    });
+    widget.resizeEventRelay?.registerForceUpdateFunction(_forceUpdateCallback);
   }
 
   @override
   void initState() {
-    _addVisualEffectSubviewToApplicationWindow();
-    _initializeResizeEventRelay();
-
     super.initState();
+    _forceUpdateCallback = _scheduleVisualEffectSubviewUpdate;
+    _initializeResizeEventRelay();
+    _scheduleVisualEffectSubviewUpdate();
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant VisualEffectSubviewContainerWithGlobalKey oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.resizeEventRelay != widget.resizeEventRelay) {
+      oldWidget.resizeEventRelay
+          ?.unregisterForceUpdateFunction(_forceUpdateCallback);
+      _initializeResizeEventRelay();
+    }
+
+    _scheduleVisualEffectSubviewUpdate();
   }
 
   /// Removes the previously added visual effect subview from the application
   /// window.
   void _removeVisualEffectSubviewFromApplicationWindow() {
-    if (_visualEffectSubviewId == null) {
+    if (_visualEffectSubviewId == null && !_isAddingVisualEffectSubview) {
       return;
     }
 
-    WindowManipulator.removeVisualEffectSubview(_visualEffectSubviewId!);
+    _nativeSubviewGeneration++;
+    final visualEffectSubviewId = _visualEffectSubviewId;
+    _visualEffectSubviewId = null;
+    _propertyStorage = VisualEffectSubviewContainerPropertyStorage();
+
+    if (visualEffectSubviewId != null) {
+      unawaited(_removeVisualEffectSubview(visualEffectSubviewId));
+    }
+  }
+
+  Future<void> _removeVisualEffectSubview(int visualEffectSubviewId) async {
+    try {
+      await WindowManipulator.removeVisualEffectSubview(
+        visualEffectSubviewId,
+      );
+    } catch (error, stackTrace) {
+      _reportNativeViewError(error, stackTrace);
+    }
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
+    _updateTimer?.cancel();
+    widget.resizeEventRelay
+        ?.unregisterForceUpdateFunction(_forceUpdateCallback);
     _removeVisualEffectSubviewFromApplicationWindow();
-
     super.dispose();
   }
 
@@ -115,49 +184,80 @@ class _VisualEffectSubviewContainerWithGlobalKeyState
   /// subview and compares the values of all of the subview's properties to
   /// their previous values. If any differences are identified, the visual
   /// effect subview will be updated on the Swift side.
-  void _modifyVisualEffectSubview(
-      {required double xPosition,
-      required double yPosition,
-      required double width,
-      required double height}) {
-    if (_visualEffectSubviewId == null) {
+  void _modifyVisualEffectSubview(_VisualEffectSubviewGeometry geometry) {
+    final visualEffectSubviewId = _visualEffectSubviewId;
+    if (visualEffectSubviewId == null) {
       return;
     }
 
-    final newProperties = VisualEffectSubviewProperties(
-      frameX: xPosition,
-      frameY: yPosition,
-      frameWidth: width,
-      frameHeight: height,
-      alphaValue: widget.alphaValue,
-      cornerMask: widget.cornerMask,
-      cornerRadius: widget.cornerRadius,
-      material: widget.material,
-      state: widget.state,
-    );
+    final newProperties = _getVisualEffectSubviewProperties(geometry);
 
     final delta = _propertyStorage.getDeltaProperties(newProperties);
     if (!delta.isEmpty) {
-      WindowManipulator.updateVisualEffectSubviewProperties(
-          _visualEffectSubviewId!, delta);
+      unawaited(_updateVisualEffectSubviewProperties(
+        visualEffectSubviewId,
+        delta,
+      ));
       _propertyStorage.updateProperties(newProperties);
+    }
+  }
+
+  Future<void> _updateVisualEffectSubviewProperties(
+    int visualEffectSubviewId,
+    VisualEffectSubviewProperties properties,
+  ) async {
+    try {
+      await WindowManipulator.updateVisualEffectSubviewProperties(
+        visualEffectSubviewId,
+        properties,
+      );
+    } catch (error, stackTrace) {
+      _reportNativeViewError(error, stackTrace);
     }
   }
 
   /// Determines the position and size of this widget relative to the
   /// application window and modifies the visual effect subview accordingly.
   void _updateVisualEffectSubview() {
-    final renderObject = (widget.key as GlobalKey?)
-        ?.currentContext
-        ?.findRenderObject() as RenderBox?;
-    if (renderObject == null) return;
-    
+    if (_isDisposed || !mounted) {
+      return;
+    }
+
+    final geometry = _getVisualEffectSubviewGeometry();
+    if (geometry == null) {
+      _removeVisualEffectSubviewFromApplicationWindow();
+      return;
+    }
+
+    if (_visualEffectSubviewId == null) {
+      unawaited(_addVisualEffectSubviewToApplicationWindow(geometry));
+      return;
+    }
+
+    _modifyVisualEffectSubview(geometry);
+  }
+
+  _VisualEffectSubviewGeometry? _getVisualEffectSubviewGeometry() {
+    final widgetContext = (widget.key as GlobalKey?)?.currentContext;
+    if (widgetContext?.mounted != true) {
+      return null;
+    }
+
+    final renderObject = widgetContext?.findRenderObject() as RenderBox?;
+    if (renderObject == null ||
+        !renderObject.attached ||
+        !renderObject.hasSize) {
+      return null;
+    }
+
+    final mediaQuery = MediaQuery.maybeOf(context);
+    if (mediaQuery == null) {
+      return null;
+    }
+
     final position = renderObject.localToGlobal(Offset.zero);
-
-    final windowHeight = MediaQuery.of(context).size.height;
-
-    final xPosition = position.dx + widget.padding.left;
-    final yPosition = windowHeight -
+    final x = position.dx + widget.padding.left;
+    final y = mediaQuery.size.height -
         renderObject.size.height -
         position.dy +
         widget.padding.bottom;
@@ -166,11 +266,40 @@ class _VisualEffectSubviewContainerWithGlobalKeyState
     final height =
         renderObject.size.height - widget.padding.bottom - widget.padding.top;
 
-    _modifyVisualEffectSubview(
-      xPosition: xPosition,
-      yPosition: yPosition,
+    if (!isValidNativeViewGeometry(
+      x: x,
+      y: y,
       width: width,
       height: height,
+    )) {
+      return null;
+    }
+
+    return _VisualEffectSubviewGeometry(
+      x: x,
+      y: y,
+      width: width,
+      height: height,
+    );
+  }
+
+  void _scheduleVisualEffectSubviewUpdate() {
+    if (_isDisposed) {
+      return;
+    }
+
+    _updateTimer?.cancel();
+    _updateTimer = Timer(const Duration(), _updateVisualEffectSubview);
+  }
+
+  void _reportNativeViewError(Object error, StackTrace stackTrace) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'macos_window_utils',
+        context: ErrorDescription('while updating a visual effect subview'),
+      ),
     );
   }
 
@@ -183,11 +312,8 @@ class _VisualEffectSubviewContainerWithGlobalKeyState
       }
     }
 
-    // Use a timer to make sure this code is run outside of the [build] method
-    // since retrieving this widget's render object is not possible inside it.
-    Timer(const Duration(), () {
-      _updateVisualEffectSubview();
-    });
+    // Render geometry is only stable after the current build has completed.
+    _scheduleVisualEffectSubviewUpdate();
   }
 
   @override
@@ -196,4 +322,18 @@ class _VisualEffectSubviewContainerWithGlobalKeyState
 
     return widget.child;
   }
+}
+
+class _VisualEffectSubviewGeometry {
+  const _VisualEffectSubviewGeometry({
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+  });
+
+  final double x;
+  final double y;
+  final double width;
+  final double height;
 }

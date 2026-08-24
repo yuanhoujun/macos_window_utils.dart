@@ -38,10 +38,15 @@ class PassthroughViewHandler {
   }
   
   func updateToolbarPassthroughView(id: String, x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, enableDebugLayers: Bool, flutterViewController: NSViewController) {
-    assert(mainFlutterWindow != nil)
-    
     DispatchQueue.main.async {
-      let window = self.mainFlutterWindow!
+      guard let window = self.mainFlutterWindow else {
+        return
+      }
+
+      guard self.isValidFrame(x: x, y: y, width: width, height: height) else {
+        self.removeToolbarPassthroughViewOnMainThread(id: id)
+        return
+      }
       
       if self.toolbarPassthroughContainer == nil {
         // Initialize the view if it is nil
@@ -67,9 +72,17 @@ class PassthroughViewHandler {
         
         // Convert Flutter coordinates to macOS coordinates
         let macY = windowHeight - y - height
+        guard macY.isFinite else {
+          self.removeToolbarPassthroughViewOnMainThread(id: id)
+          return
+        }
         
         let flutterToggleInvertedPosition = CGRect(x: x, y: macY, width: width, height: height)
         let frame = containerView.convert(flutterToggleInvertedPosition, from: nil)
+        guard self.isValidFrame(frame) else {
+          self.removeToolbarPassthroughViewOnMainThread(id: id)
+          return
+        }
         
         var view: PassthroughView
         if let existingView = self.toolbarPassthroughViews[id] {
@@ -93,11 +106,33 @@ class PassthroughViewHandler {
   
   func removeToolbarPassthroughView(id: String) {
     DispatchQueue.main.async {
-      if let view = self.toolbarPassthroughViews[id] {
-        view.removeFromSuperview()
-        self.toolbarPassthroughViews.removeValue(forKey: id)
-      }
+      self.removeToolbarPassthroughViewOnMainThread(id: id)
     }
+  }
+
+  private func removeToolbarPassthroughViewOnMainThread(id: String) {
+    if let view = self.toolbarPassthroughViews[id] {
+      view.removeFromSuperview()
+      self.toolbarPassthroughViews.removeValue(forKey: id)
+    }
+  }
+
+  private func isValidFrame(_ frame: CGRect) -> Bool {
+    return isValidFrame(
+      x: frame.origin.x,
+      y: frame.origin.y,
+      width: frame.size.width,
+      height: frame.size.height
+    )
+  }
+
+  private func isValidFrame(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat) -> Bool {
+    return x.isFinite &&
+      y.isFinite &&
+      width.isFinite &&
+      height.isFinite &&
+      width >= 0 &&
+      height >= 0
   }
 }
 

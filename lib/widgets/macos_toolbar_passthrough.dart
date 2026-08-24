@@ -19,6 +19,7 @@ import 'dart:collection';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:macos_window_utils/src/native_view_geometry.dart';
 import 'package:macos_window_utils/window_manipulator.dart';
 
 const _debounceDuration = Duration(milliseconds: 10);
@@ -202,11 +203,11 @@ class MacosToolbarPassthroughState extends State<MacosToolbarPassthrough>
 
   @override
   void dispose() {
-    _sendRemoveMessage();
     _isDisposed = true;
+    _debounceTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _registry?.unregister(_key.toString());
-    _debounceTimer?.cancel();
+    _sendRemoveMessage();
     super.dispose();
   }
 
@@ -252,7 +253,8 @@ class MacosToolbarPassthroughState extends State<MacosToolbarPassthrough>
     final RenderBox? renderBox =
         _key.currentContext?.findRenderObject() as RenderBox?;
 
-    if (renderBox == null || !renderBox.attached) {
+    if (renderBox == null || !renderBox.attached || !renderBox.hasSize) {
+      _removeInvalidNativeView();
       return;
     }
 
@@ -318,6 +320,18 @@ class MacosToolbarPassthroughState extends State<MacosToolbarPassthrough>
       }
     }
 
+    if (position != null &&
+        size != null &&
+        !isValidNativeViewGeometry(
+          x: position.dx,
+          y: position.dy,
+          width: size.width,
+          height: size.height,
+        )) {
+      position = null;
+      size = null;
+    }
+
     // Update native view if was removed or changed position or size
     if (_lastPosition != position || _lastSize != size) {
       // If item is not within the scrollable viewport
@@ -338,6 +352,16 @@ class MacosToolbarPassthroughState extends State<MacosToolbarPassthrough>
       _lastPosition = position;
       _lastSize = size;
     }
+  }
+
+  void _removeInvalidNativeView() {
+    if (_lastPosition == null && _lastSize == null) {
+      return;
+    }
+
+    _lastPosition = null;
+    _lastSize = null;
+    _sendRemoveMessage();
   }
 
   void _sendRemoveMessage() async {
